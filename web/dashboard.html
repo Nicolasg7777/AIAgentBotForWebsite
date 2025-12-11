@@ -5,29 +5,124 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Support Agent Dashboard</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@latest/css/pico.min.css"/>
+  <style>
+    .tab-buttons { display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 2px solid #e2e8f0; }
+    .tab-buttons button { background: none; border: none; padding: 1rem; cursor: pointer; border-bottom: 3px solid transparent; }
+    .tab-buttons button.active { border-bottom-color: #2b6cb0; color: #2b6cb0; font-weight: 600; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .success { color: #10b981; font-weight: 600; }
+    .error { color: #ef4444; font-weight: 600; }
+    .code-block { background: #1e293b; color: #f8fafc; padding: 1rem; border-radius: 8px; overflow-x: auto; margin: 1rem 0; position: relative; }
+    .copy-btn { position: absolute; top: 0.5rem; right: 0.5rem; padding: 0.5rem 1rem; background: #2b6cb0; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    .copy-btn:hover { background: #2c5282; }
+    .credential-section { background: #f8fafc; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; }
+    .status-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.875rem; font-weight: 600; }
+    .status-connected { background: #d1fae5; color: #065f46; }
+    .status-disconnected { background: #fee2e2; color: #991b1b; }
+  </style>
 </head>
 <body>
   <main class="container">
-    <h2>Support Dashboard</h2>
-    <section>
-      <label>Supabase URL <input id="supabaseUrl"/></label>
-      <label>Supabase anon key <input id="supabaseKey"/></label>
-      <button id="connectBtn">Connect</button>
-    </section>
-    <section>
+    <h2>AI Support Agent Dashboard</h2>
+    
+    <div class="tab-buttons">
+      <button class="active" onclick="showTab('setup')">⚙️ Setup</button>
+      <button onclick="showTab('analytics')">📊 Analytics</button>
+      <button onclick="showTab('bookings')">📅 Bookings</button>
+      <button onclick="showTab('snippet')">📋 Get Code</button>
+    </div>
+
+    <!-- Setup Tab -->
+    <div id="setup" class="tab-content active">
+      <h3>One-Click Setup</h3>
+      <p>Enter your credentials below and we'll handle the rest!</p>
+
+      <div class="credential-section">
+        <h4>1️⃣ Supabase (Database)</h4>
+        <label>Supabase URL <input id="supabaseUrl" placeholder="https://yourproject.supabase.co"/></label>
+        <label>Supabase Anon Key <input id="supabaseKey" type="password" placeholder="eyJhbGc..."/></label>
+        <button id="testSupabase" onclick="testSupabase()">Test Connection</button>
+        <span id="supabaseStatus"></span>
+      </div>
+
+      <div class="credential-section">
+        <h4>2️⃣ Google Gemini AI (Free)</h4>
+        <p><small>Get your free API key: <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a></small></p>
+        <label>Gemini API Key <input id="geminiKey" type="password" placeholder="AIzaSy..."/></label>
+        <button onclick="testGemini()">Test AI</button>
+        <span id="geminiStatus"></span>
+      </div>
+
+      <div class="credential-section">
+        <h4>3️⃣ Calendly (Scheduling)</h4>
+        <p><small>Get your link: <a href="https://calendly.com" target="_blank">calendly.com</a> → Event Types → Copy link</small></p>
+        <label>Calendly Link <input id="calendlyLink" placeholder="https://calendly.com/yourname/15min"/></label>
+        <label>Support Agent Name <input id="agentName" placeholder="Support Bot"/></label>
+      </div>
+
+      <div class="credential-section">
+        <h4>4️⃣ Resend (Email Reminders - Optional)</h4>
+        <p><small>Get free API key: <a href="https://resend.com/api-keys" target="_blank">resend.com/api-keys</a> (3,000 emails/month free)</small></p>
+        <label>Resend API Key <input id="resendKey" type="password" placeholder="re_..."/></label>
+        <label>From Email <input id="fromEmail" placeholder="support@yourdomain.com"/></label>
+        <button onclick="testEmail()">Send Test Email</button>
+        <span id="emailStatus"></span>
+      </div>
+
+      <div class="credential-section">
+        <h4>5️⃣ Twilio (SMS Reminders - Optional)</h4>
+        <p><small>Get credentials: <a href="https://console.twilio.com" target="_blank">console.twilio.com</a> (~$1.79/month)</small></p>
+        <label>Account SID <input id="twilioSid" type="password" placeholder="AC..."/></label>
+        <label>Auth Token <input id="twilioToken" type="password" placeholder="..."/></label>
+        <label>Twilio Phone <input id="twilioPhone" placeholder="+1234567890"/></label>
+        <button onclick="testSMS()">Send Test SMS</button>
+        <span id="smsStatus"></span>
+      </div>
+
+      <button onclick="saveConfig()" style="background: #10b981;">💾 Save Configuration</button>
+      <button onclick="generateSnippet()" style="background: #2b6cb0;">🚀 Generate WordPress Code</button>
+    </div>
+
+    <!-- Analytics Tab -->
+    <div id="analytics" class="tab-content">
       <h3>Traffic & Sessions</h3>
       <table>
         <thead><tr><th>Session</th><th>Profile</th><th>Status</th><th>Last Activity</th></tr></thead>
         <tbody id="sessionsBody"></tbody>
       </table>
-    </section>
-    <section>
-      <h3>Bookings</h3>
+    </div>
+
+    <!-- Bookings Tab -->
+    <div id="bookings" class="tab-content">
+      <h3>Scheduled Meetings</h3>
       <table>
-        <thead><tr><th>When</th><th>Name</th><th>Email</th><th>Calendly</th><th>Reminder</th></tr></thead>
+        <thead><tr><th>When</th><th>Name</th><th>Email</th><th>Phone</th><th>Calendly</th><th>Reminder</th><th>Actions</th></tr></thead>
         <tbody id="bookingsBody"></tbody>
       </table>
-    </section>
+    </div>
+
+    <!-- Snippet Tab -->
+    <div id="snippet" class="tab-content">
+      <h3>Your WordPress Code (WPCode Snippet)</h3>
+      <p>Copy and paste this into WordPress → WPCode → Add Snippet → JavaScript</p>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copySnippet()">📋 Copy</button>
+        <pre id="generatedSnippet">Click "Generate WordPress Code" in the Setup tab first!</pre>
+      </div>
+      
+      <h4>Installation Steps:</h4>
+      <ol>
+        <li>WordPress Admin → WPCode → Add Snippet</li>
+        <li>Choose "Add Your Custom Code (New Snippet)"</li>
+        <li>Select "JavaScript Snippet"</li>
+        <li>Paste the code above</li>
+        <li>Location: <strong>Footer</strong>, Priority: <strong>1</strong></li>
+        <li>Toggle to <strong>Active</strong></li>
+        <li>Click "Save Snippet"</li>
+        <li>Visit your website - chat button appears bottom-right!</li>
+      </ol>
+    </div>
   </main>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="dashboard.js"></script>
