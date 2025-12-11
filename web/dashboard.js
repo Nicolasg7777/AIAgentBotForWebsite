@@ -19,7 +19,7 @@ function loadConfig() {
     config = JSON.parse(saved);
     document.getElementById('supabaseUrl').value = config.supabaseUrl || '';
     document.getElementById('supabaseKey').value = config.supabaseKey || '';
-    document.getElementById('openaiKey').value = config.openaiKey || '';
+    document.getElementById('groqKey').value = config.groqKey || '';
     document.getElementById('calendlyLink').value = config.calendlyLink || '';
     document.getElementById('agentName').value = config.agentName || 'Support Bot';
     document.getElementById('resendKey').value = config.resendKey || '';
@@ -40,7 +40,7 @@ function saveConfig() {
   config = {
     supabaseUrl: document.getElementById('supabaseUrl').value.trim(),
     supabaseKey: document.getElementById('supabaseKey').value.trim(),
-    openaiKey: document.getElementById('openaiKey').value.trim(),
+    groqKey: document.getElementById('groqKey').value.trim(),
     calendlyLink: document.getElementById('calendlyLink').value.trim(),
     agentName: document.getElementById('agentName').value.trim() || 'Support Bot',
     resendKey: document.getElementById('resendKey').value.trim(),
@@ -79,10 +79,10 @@ async function testSupabase() {
   }
 }
 
-// Test OpenAI
-async function testOpenAI() {
-  const key = document.getElementById('openaiKey').value.trim();
-  const status = document.getElementById('openaiStatus');
+// Test Groq AI
+async function testGroq() {
+  const key = document.getElementById('groqKey').value.trim();
+  const status = document.getElementById('groqStatus');
   
   if(!key) {
     status.innerHTML = '<span class="error">❌ Please enter API key</span>';
@@ -90,14 +90,14 @@ async function testOpenAI() {
   }
   
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${key}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'mixtral-8x7b-32768',
         messages: [{ role: 'user', content: 'Say "AI test successful" in exactly 3 words.' }],
         max_tokens: 50
       })
@@ -111,9 +111,9 @@ async function testOpenAI() {
     const data = await response.json();
     const reply = data.choices?.[0]?.message?.content || '(no response)';
     status.innerHTML = `<span class="success">✅ AI working! Response: "${reply}"</span>`;
-    localStorage.setItem('workingAIModel', 'openai');
+    localStorage.setItem('workingAIModel', 'groq');
   } catch(err) {
-    status.innerHTML = `<span class="error">❌ Error: ${err.message}<br>Get key from platform.openai.com (free $5 credit)</span>`;
+    status.innerHTML = `<span class="error">❌ Error: ${err.message}</span>`;
   }
 }
 
@@ -249,8 +249,8 @@ function generateSnippet() {
     SUPABASE_ANON_KEY: '${config.supabaseKey}',
     CALENDLY_LINK: '${config.calendlyLink || 'https://calendly.com/yourname/15min'}',
     SUPPORT_AGENT_NAME: '${config.agentName || 'Support Bot'}',
-    OPENAI_API_KEY: '${config.openaiKey || ''}',
-    USE_AI: ${config.openaiKey ? 'true' : 'false'}
+    GROQ_API_KEY: '${config.groqKey || ''}',
+    USE_AI: ${config.groqKey ? 'true' : 'false'}
   };
   const SYSTEM_PROMPT = \`You are a helpful customer support agent. Your goal: 1) Greet warmly 2) Collect: full name, email, phone, reason for contact, availability 3) Provide Calendly link: \${CONFIG.CALENDLY_LINK} 4) Answer service questions. RULES: Ask ONE question at a time, validate email format, be concise (2-3 sentences), guide conversation toward booking. Services: Marketing, SEO, Web Design. Hours: Mon-Fri 9am-5pm. Pricing: Custom quotes.\`;
   let supabaseClient; const loadSupabase = async () => { if(window.supabase) return; await new Promise((resolve)=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'; s.onload=resolve; document.head.appendChild(s); }); };

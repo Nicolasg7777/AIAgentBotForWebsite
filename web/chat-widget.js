@@ -4,7 +4,7 @@
     SUPABASE_ANON_KEY: 'YOUR_SUPABASE_ANON_KEY',
     CALENDLY_LINK: 'https://calendly.com/yourname/15min',
     SUPPORT_AGENT_NAME: 'Support Bot',
-    GEMINI_API_KEY: 'YOUR_OPENAI_API_KEY', // Get free at https://platform.openai.com/api-keys
+    GEMINI_API_KEY: 'YOUR_GROQ_API_KEY', // Get free at https://console.groq.com/keys
     USE_AI: true // Set to false to use simple FAQ mode
   };
 
@@ -164,14 +164,14 @@ Remember: Your primary goal is to collect contact info and schedule a meeting!`;
 
     async function getAIResponse(userMessage){
       try {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${CONFIG.GEMINI_API_KEY}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            model: 'gpt-4o-mini',
+            model: 'mixtral-8x7b-32768',
             messages: [
               { role: 'system', content: SYSTEM_PROMPT },
               ...conversationHistory.map(msg => ({
@@ -184,7 +184,7 @@ Remember: Your primary goal is to collect contact info and schedule a meeting!`;
           })
         });
         
-        if(!response.ok) throw new Error(`OpenAI API error: ${response.status}`);
+        if(!response.ok) throw new Error(`Groq API error: ${response.status}`);
         
         const data = await response.json();
         return data.choices?.[0]?.message?.content || simpleFAQ(userMessage);
