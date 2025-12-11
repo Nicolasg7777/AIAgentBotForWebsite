@@ -163,35 +163,45 @@ Remember: Your primary goal is to collect contact info and schedule a meeting!`;
     });
 
     async function getAIResponse(userMessage){
-      try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${CONFIG.GEMINI_API_KEY}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              { role: 'user', parts: [{ text: SYSTEM_PROMPT }] },
-              ...conversationHistory.map(msg => ({
-                role: msg.role === 'user' ? 'user' : 'model',
-                parts: [{ text: msg.content }]
-              }))
-            ],
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 200,
-              topP: 0.8,
-              topK: 10
-            }
-          })
-        });
-        
-        if(!response.ok) throw new Error('Gemini API error');
-        
-        const data = await response.json();
-        return data.candidates[0].content.parts[0].text;
-      } catch(err) {
-        console.error('AI Error:', err);
-        return simpleFAQ(userMessage); // Fallback to simple FAQ
+      // Try saved working model first, then fallback list
+      const savedModel = localStorage.getItem('workingGeminiModel');
+      const modelsToTry = savedModel ? 
+        [savedModel, 'gemini-pro', 'gemini-1.5-pro', 'gemini-1.5-flash'] :
+        ['gemini-pro', 'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.5-flash-latest'];
+      
+      for(const model of modelsToTry) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${CONFIG.GEMINI_API_KEY}`;
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [
+                { role: 'user', parts: [{ text: SYSTEM_PROMPT }] },
+                ...conversationHistory.map(msg => ({
+                  role: msg.role === 'user' ? 'user' : 'model',
+                  parts: [{ text: msg.content }]
+                }))
+              ],
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 200,
+                topP: 0.8,
+                topK: 10
+              }
+            })
+          });
+          if(response.ok) {
+            const data = await response.json();
+            return data?.candidates?.[0]?.content?.parts?.[0]?.text || simpleFAQ(userMessage);
+          }
+        } catch(err) {
+          console.error(`AI model ${model} failed:`, err);
+        }
       }
+      // All models failed, use FAQ fallback
+      console.log('All AI models failed, using FAQ fallback');
+      return simpleFAQ(userMessage);
     }
 
     function extractDataFromConversation(history){

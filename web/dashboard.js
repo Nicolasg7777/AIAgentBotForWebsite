@@ -89,23 +89,70 @@ async function testGemini() {
     return;
   }
   
-  try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: 'Say "AI test successful" in exactly 3 words.' }] }]
-      })
-    });
-    
-    if(!response.ok) throw new Error(`API error: ${response.status}`);
-    const data = await response.json();
-    const reply = data.candidates[0].content.parts[0].text;
-    
-    status.innerHTML = `<span class="success">✅ AI working! Response: "${reply}"</span>`;
-  } catch(err) {
-    status.innerHTML = `<span class="error">❌ Error: ${err.message}</span>`;
+  // Try multiple models in order
+  const modelsToTry = [
+    'gemini-pro',
+    'gemini-1.5-pro',
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-flash-002'
+  ];
+  
+  for(const model of modelsToTry) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: 'Say "AI test successful" in exactly 3 words.' }] }]
+        })
+      });
+      
+      if(response.ok) {
+        const data = await response.json();
+        const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || '(no text)';
+        status.innerHTML = `<span class="success">✅ AI working! Model: ${model}<br>Response: "${reply}"</span>`;
+        // Save working model to config
+        localStorage.setItem('workingGeminiModel', model);
+        return;
+      } else {
+        const body = await safeJson(response);
+        console.log(`Model ${model} failed with ${response.status}:`, body);
+        // Continue to next model
+      }
+    } catch(err) {
+      console.log(`Model ${model} error:`, err);
+      // Continue to next model
+    }
   }
+  
+  // If all models failed
+  status.innerHTML = '<span class="error">❌ All models failed. Check console for details. Verify API key is from aistudio.google.com/app/apikey and billing is enabled.</span>';
+}
+
+// Safely parse JSON error bodies
+async function safeJson(response){
+  try { return await response.json(); } catch { return null; }
+}
+
+// Provide actionable hints for common Gemini errors
+function buildGeminiHint(status, body){
+  const msg = body?.error?.message || body?.message || '';
+  if(status === 404) {
+    // Common causes: API not enabled/usage agreements, wrong project/key, restricted key, wrong model
+    return 'Check: (1) Generative Language API enabled and agreements accepted in Google Cloud, (2) API key belongs to the same project where API is enabled, (3) Key restrictions allow your domain (e.g., ai-support-agent.pages.dev), (4) Try model gemini-1.5-flash-002. ' + (msg ? `Details: ${msg}` : '');
+  }
+  if(status === 403) {
+    return 'Forbidden: verify billing/quotas and that the API key has access; remove overly strict referer restrictions.';
+  }
+  if(status === 401) {
+    return 'Unauthorized: confirm the API key is valid and pasted correctly.';
+  }
+  if(status === 400) {
+    return 'Bad request: check request JSON format and that your key restrictions allow the site; try the fallback model if the primary is unavailable.';
+  }
+  return msg || '';
 }
 
 // Test email sending
