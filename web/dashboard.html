@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Support Agent Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@latest/css/pico.min.css"/>
+</head>
+<body>
+  <main class="container">
+    <h2>Support Dashboard</h2>
+    <section>
+      <label>Supabase URL <input id="supabaseUrl"/></label>
+      <label>Supabase anon key <input id="supabaseKey"/></label>
+      <button id="connectBtn">Connect</button>
+    </section>
+    <section>
+      <h3>Traffic & Sessions</h3>
+      <table>
+        <thead><tr><th>Session</th><th>Profile</th><th>Status</th><th>Last Activity</th></tr></thead>
+        <tbody id="sessionsBody"></tbody>
+      </table>
+    </section>
+    <section>
+      <h3>Bookings</h3>
+      <table>
+        <thead><tr><th>When</th><th>Name</th><th>Email</th><th>Calendly</th><th>Reminder</th></tr></thead>
+        <tbody id="bookingsBody"></tbody>
+      </table>
+    </section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>

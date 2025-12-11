@@ -1,0 +1,12 @@
+.ai-chat-button{position:fixed;right:20px;bottom:20px;background:#2b6cb0;color:#fff;border:none;border-radius:24px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,.2);cursor:pointer;font-family:Inter,system-ui,sans-serif;z-index:9999}
+.ai-chat-button:hover{background:#2c5282}
+.ai-chat-panel{position:fixed;right:20px;bottom:70px;width:340px;max-height:480px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.15);display:none;flex-direction:column;overflow:hidden;z-index:9999}
+.ai-chat-header{padding:10px 12px;background:#2b6cb0;color:#fff;font-weight:600}
+.ai-chat-messages{flex:1;overflow:auto;padding:12px;background:#f8fafc}
+.ai-chat-input{display:flex;gap:8px;padding:10px;border-top:1px solid #e2e8f0}
+.ai-chat-input input{flex:1;border:1px solid #cbd5e1;border-radius:8px;padding:8px}
+.msg{margin-bottom:10px}
+.msg .bubble{display:inline-block;padding:8px 10px;border-radius:10px;max-width:85%}
+.msg.user .bubble{background:#e2e8f0;color:#1f2937}
+.msg.bot .bubble{background:#eef2ff;color:#1e293b}
+.ai-chat-close{float:right;cursor:pointer}
