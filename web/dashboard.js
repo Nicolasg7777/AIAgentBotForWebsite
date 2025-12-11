@@ -47,7 +47,9 @@ function saveConfig() {
     fromEmail: document.getElementById('fromEmail').value.trim(),
     twilioSid: document.getElementById('twilioSid').value.trim(),
     twilioToken: document.getElementById('twilioToken').value.trim(),
-    twilioPhone: document.getElementById('twilioPhone').value.trim()
+    twilioPhone: document.getElementById('twilioPhone').value.trim(),
+    googleClientId: localStorage.getItem('googleClientId') || '',
+    googleAccessToken: localStorage.getItem('googleAccessToken') || ''
   };
   
   localStorage.setItem('aiAgentConfig', JSON.stringify(config));
@@ -288,6 +290,32 @@ async function sendReminder(bookingId, email, name, scheduledFor) {
   }
 }
 
+// Create calendar event from booking
+async function createCalendarFromBooking(bookingId) {
+  if(!localStorage.getItem('googleAccessToken')) {
+    alert('⚠️ Google Calendar not connected. Set up in the Setup tab.');
+    return;
+  }
+  
+  try {
+    const { data } = await supabaseClient.from('bookings').select('*').eq('id', bookingId).single();
+    if(!data) {
+      alert('❌ Booking not found');
+      return;
+    }
+    
+    const eventId = await createGoogleCalendarEvent(data);
+    if(eventId) {
+      alert('✅ Calendar event created!');
+      loadBookings();
+    } else {
+      alert('❌ Failed to create event. Check browser console.');
+    }
+  } catch(err) {
+    alert(`❌ Error: ${err.message}`);
+  }
+}
+
 // Load sessions
 async function loadSessions(){
   if(!supabaseClient) return;
@@ -303,14 +331,17 @@ async function loadSessions(){
 // Load bookings
 async function loadBookings(){
   if(!supabaseClient) return;
-  const { data } = await supabaseClient.from('bookings').select('id, scheduled_for, reminder_email_sent, profiles:profile_id(full_name,email,phone), calendly_link').order('scheduled_for',{ascending:true}).limit(50);
+  const { data } = await supabaseClient.from('bookings').select('id, scheduled_for, reminder_email_sent, calendar_event_id, profiles:profile_id(full_name,email,phone), calendly_link').order('scheduled_for',{ascending:true}).limit(50);
   const tbody=document.getElementById('bookingsBody'); tbody.innerHTML='';
   (data||[]).forEach(b=>{
     const tr=document.createElement('tr');
     const reminderBtn = b.reminder_email_sent ? 
       '<span class="status-badge status-connected">Sent</span>' :
       `<button onclick="sendReminder('${b.id}','${b.profiles?.email}','${b.profiles?.full_name}','${b.scheduled_for}')">Send Email</button>`;
-    tr.innerHTML=`<td>${new Date(b.scheduled_for).toLocaleString()}</td><td>${b.profiles?.full_name||'N/A'}</td><td>${b.profiles?.email||'N/A'}</td><td>${b.profiles?.phone||'N/A'}</td><td><a href="${b.calendly_link}" target="_blank">Open</a></td><td>${reminderBtn}</td><td><button onclick="if(confirm('Delete?')) deleteBooking('${b.id}')">🗑️</button></td>`;
+    const calendarBtn = b.calendar_event_id ? 
+      '<span class="status-badge status-connected">✓ Created</span>' :
+      `<button onclick="createCalendarFromBooking('${b.id}')">Create</button>`;
+    tr.innerHTML=`<td>${new Date(b.scheduled_for).toLocaleString()}</td><td>${b.profiles?.full_name||'N/A'}</td><td>${b.profiles?.email||'N/A'}</td><td>${b.profiles?.phone||'N/A'}</td><td><a href="${b.calendly_link}" target="_blank">Open</a></td><td>${calendarBtn}</td><td>${reminderBtn}</td><td><button onclick="if(confirm('Delete?')) deleteBooking('${b.id}')">🗑️</button></td>`;
     tbody.appendChild(tr);
   });
 }
@@ -321,5 +352,180 @@ async function deleteBooking(id) {
   loadBookings();
 }
 
+// ==========================
+// Google Calendar Functions
+// ==========================
+
+function showGoogleCalendarSetup() {
+  document.getElementById('googleCalendarModal').classList.add('active');
+}
+
+function closeGoogleCalendarSetup() {
+  document.getElementById('googleCalendarModal').classList.remove('active');
+}
+
+function saveGoogleClientId() {
+  const clientId = document.getElementById('googleClientId').value.trim();
+  if(!clientId) {
+    alert('Please enter your Google Client ID');
+    return;
+  }
+  localStorage.setItem('googleClientId', clientId);
+  config.googleClientId = clientId;
+  document.getElementById('googleClientId').value = '';
+  closeGoogleCalendarSetup();
+  updateCalendarStatus();
+  alert('✅ Client ID saved! Click "Connect Google Calendar" to authenticate.');
+}
+
+function connectGoogleCalendar() {
+  const clientId = localStorage.getItem('googleClientId');
+  if(!clientId) {
+    alert('Please set up your Google Client ID first.');
+    showGoogleCalendarSetup();
+    return;
+  }
+  
+  // Build OAuth URL
+  const redirectUri = window.location.origin + window.location.pathname;
+  const scopes = encodeURIComponent('https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.readonly');
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+    `client_id=${clientId}&` +
+    `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+    `response_type=token&` +
+    `scope=${scopes}&` +
+    `access_type=offline`;
+  
+  // Open OAuth popup
+  window.open(authUrl, 'googleAuth', 'width=600,height=600');
+  
+  // Listen for message from OAuth redirect
+  window.addEventListener('message', handleGoogleOAuthCallback);
+}
+
+function handleGoogleOAuthCallback(event) {
+  const hash = window.location.hash;
+  if(hash && hash.includes('access_token')) {
+    const params = new URLSearchParams(hash.replace('#', ''));
+    const token = params.get('access_token');
+    if(token) {
+      localStorage.setItem('googleAccessToken', token);
+      localStorage.setItem('googleTokenExpiry', Date.now() + (parseInt(params.get('expires_in') || '3600') * 1000));
+      config.googleAccessToken = token;
+      updateCalendarStatus();
+      alert('✅ Google Calendar connected successfully!');
+      window.location.hash = '';
+    }
+  }
+}
+
+function updateCalendarStatus() {
+  const clientId = localStorage.getItem('googleClientId');
+  const accessToken = localStorage.getItem('googleAccessToken');
+  const statusEl = document.getElementById('calendarStatus');
+  const disconnectBtn = document.getElementById('disconnectCalendarBtn');
+  
+  if(accessToken) {
+    statusEl.innerHTML = '<span class="status-badge status-connected">✓ Connected</span>';
+    disconnectBtn.style.display = 'inline-block';
+  } else if(clientId) {
+    statusEl.innerHTML = '<span class="status-badge status-disconnected">⚠ Not Authenticated</span>';
+  } else {
+    statusEl.innerHTML = '<span class="status-badge status-disconnected">⚠ Not Configured</span>';
+  }
+}
+
+function disconnectGoogleCalendar() {
+  if(confirm('Are you sure? This will disconnect Google Calendar access.')) {
+    localStorage.removeItem('googleAccessToken');
+    localStorage.removeItem('googleTokenExpiry');
+    config.googleAccessToken = '';
+    updateCalendarStatus();
+    alert('✅ Google Calendar disconnected');
+  }
+}
+
+async function createGoogleCalendarEvent(bookingData) {
+  const accessToken = localStorage.getItem('googleAccessToken');
+  if(!accessToken) return null;
+  
+  try {
+    // Parse scheduled time
+    const eventTime = new Date(bookingData.scheduled_for);
+    const startTime = eventTime.toISOString();
+    const endTime = new Date(eventTime.getTime() + 30 * 60000).toISOString(); // 30 min meeting
+    
+    const event = {
+      summary: `Meeting with ${bookingData.profiles?.full_name || 'Customer'}`,
+      description: `Chat Support Booking\n\nName: ${bookingData.profiles?.full_name}\nEmail: ${bookingData.profiles?.email}\nPhone: ${bookingData.profiles?.phone}\n\nMessage: ${bookingData.message || 'N/A'}`,
+      start: { dateTime: startTime },
+      end: { dateTime: endTime },
+      attendees: [{ email: bookingData.profiles?.email }],
+      conferenceData: {
+        createRequest: {
+          requestId: `booking-${bookingData.id}`,
+          conferenceSolutionKey: { type: 'hangoutsMeet' }
+        }
+      }
+    };
+    
+    const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(event)
+    });
+    
+    if(response.ok) {
+      const data = await response.json();
+      // Update booking with calendar event ID
+      await supabaseClient.from('bookings').update({ calendar_event_id: data.id }).eq('id', bookingData.id);
+      return data.id;
+    } else {
+      console.error('Failed to create calendar event:', response.status);
+      return null;
+    }
+  } catch(error) {
+    console.error('Calendar event creation error:', error);
+    return null;
+  }
+}
+
+async function checkCalendarAvailability(startTime, endTime) {
+  const accessToken = localStorage.getItem('googleAccessToken');
+  if(!accessToken) return true; // If no calendar, don't block booking
+  
+  try {
+    const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    
+    if(!response.ok) return true;
+    
+    const data = await response.json();
+    const events = data.items || [];
+    const checkStart = new Date(startTime);
+    const checkEnd = new Date(endTime);
+    
+    // Check for conflicts
+    const hasConflict = events.some(event => {
+      if(!event.start?.dateTime) return false;
+      const eventStart = new Date(event.start.dateTime);
+      const eventEnd = new Date(event.end?.dateTime || eventStart.getTime() + 3600000);
+      return !(checkEnd <= eventStart || checkStart >= eventEnd);
+    });
+    
+    return !hasConflict;
+  } catch(error) {
+    console.error('Availability check error:', error);
+    return true;
+  }
+}
+
 // Initialize on load
-window.addEventListener('DOMContentLoaded', loadConfig);
+window.addEventListener('DOMContentLoaded', () => {
+  loadConfig();
+  updateCalendarStatus();
+});

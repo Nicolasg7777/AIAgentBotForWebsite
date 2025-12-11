@@ -5,7 +5,8 @@ This repo contains a **real AI-powered** customer support agent using **Google G
 - 💬 Floating chat widget for WordPress (Hostinger) via WPCode snippet
 - 🎯 Reliably collects: name, email, phone, reason, availability
 - 📅 Schedules meetings via Calendly integration
-- 🗄️ Logs all conversations to Supabase (free tier)
+- � **NEW:** Auto-creates Google Calendar events with Google Meet links
+- �🗄️ Logs all conversations to Supabase (free tier)
 - 📊 Admin dashboard to view logs, sessions, and upcoming meetings
 - 📧 Email reminders for meetings (Supabase Edge + Resend optional)
 - 🆓 **100% FREE** - Handles 20-25 concurrent users easily
@@ -43,6 +44,14 @@ This repo contains a **real AI-powered** customer support agent using **Google G
 3. Click "Create API Key"
 4. Copy the key (starts with `AI...`)
 5. **This enables natural AI conversations!**
+
+### Step 2.6: (Optional) Google Calendar Setup (5 min) 📆
+Auto-create calendar events when customers book meetings:
+1. See [GOOGLE-CALENDAR-SETUP.md](GOOGLE-CALENDAR-SETUP.md) for detailed steps
+2. Takes 5 minutes in Google Cloud Console
+3. Dashboard has one-click "Connect Google Calendar" button
+4. Events are created automatically with Google Meet links
+5. **Optional but highly recommended!**
 
 ### Step 3: Configure Widget (2 min)
 1. Open `web/wpcode-snippet.html`
@@ -122,6 +131,7 @@ create table if not exists bookings (
   profile_id uuid references profiles(id) on delete set null,
   calendly_link text,
   scheduled_for timestamptz,
+  calendar_event_id text,
   reminder_email_sent boolean default false,
   created_at timestamptz default now()
 );

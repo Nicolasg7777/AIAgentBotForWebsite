@@ -20,9 +20,38 @@
     .status-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.875rem; font-weight: 600; }
     .status-connected { background: #d1fae5; color: #065f46; }
     .status-disconnected { background: #fee2e2; color: #991b1b; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+    .modal.active { display: flex; }
+    .modal-content { background: white; padding: 2rem; border-radius: 8px; max-width: 600px; max-height: 80vh; overflow-y: auto; }
+    .modal-close { float: right; cursor: pointer; font-size: 1.5rem; }
   </style>
 </head>
 <body>
+  <div id="googleCalendarModal" class="modal">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeGoogleCalendarSetup()">✕</span>
+      <h3>Google Calendar Setup (5 minutes)</h3>
+      <ol>
+        <li>Go to <a href="https://console.cloud.google.com" target="_blank">Google Cloud Console</a></li>
+        <li>Create a new project (name: "AI Support Agent")</li>
+        <li>Enable "Google Calendar API"
+          <ul><li>Search for "Google Calendar API"</li>
+          <li>Click "Enable"</li></ul>
+        </li>
+        <li>Create OAuth 2.0 credentials
+          <ul><li>Go to "Credentials"</li>
+          <li>Click "Create Credentials" → "OAuth client ID"</li>
+          <li>Choose "Web application"</li>
+          <li>Add authorized redirect URI: <code id="redirectUri">https://yoursite.com/dashboard.html</code></li>
+          <li>Copy your Client ID</li></ul>
+        </li>
+        <li>Paste Client ID below</li>
+        <li>Click "Connect Google Calendar"</li>
+      </ol>
+      <label>Google OAuth Client ID <input id="googleClientId" placeholder="Your Client ID from Google Cloud Console"/></label>
+      <button onclick="saveGoogleClientId()">Save Client ID</button>
+    </div>
+  </div>
   <main class="container">
     <h2>AI Support Agent Dashboard</h2>
     
@@ -71,13 +100,11 @@
       </div>
 
       <div class="credential-section">
-        <h4>5️⃣ Twilio (SMS Reminders - Optional)</h4>
-        <p><small>Get credentials: <a href="https://console.twilio.com" target="_blank">console.twilio.com</a> (~$1.79/month)</small></p>
-        <label>Account SID <input id="twilioSid" type="password" placeholder="AC..."/></label>
-        <label>Auth Token <input id="twilioToken" type="password" placeholder="..."/></label>
-        <label>Twilio Phone <input id="twilioPhone" placeholder="+1234567890"/></label>
-        <button onclick="testSMS()">Send Test SMS</button>
-        <span id="smsStatus"></span>
+        <h4>6️⃣ Google Calendar (Optional - Auto-Create Events)</h4>
+        <p><small>Auto-create calendar events when someone books. <a href="#" onclick="showGoogleCalendarSetup(); return false;">Click here for setup instructions</a></small></p>
+        <button onclick="connectGoogleCalendar()">🔗 Connect Google Calendar</button>
+        <span id="calendarStatus"></span>
+        <button id="disconnectCalendarBtn" style="display:none;" onclick="disconnectGoogleCalendar()">❌ Disconnect Calendar</button>
       </div>
 
       <button onclick="saveConfig()" style="background: #10b981;">💾 Save Configuration</button>
@@ -97,7 +124,7 @@
     <div id="bookings" class="tab-content">
       <h3>Scheduled Meetings</h3>
       <table>
-        <thead><tr><th>When</th><th>Name</th><th>Email</th><th>Phone</th><th>Calendly</th><th>Reminder</th><th>Actions</th></tr></thead>
+        <thead><tr><th>When</th><th>Name</th><th>Email</th><th>Phone</th><th>Calendly</th><th>Calendar Event</th><th>Reminder</th><th>Actions</th></tr></thead>
         <tbody id="bookingsBody"></tbody>
       </table>
     </div>
@@ -123,8 +150,44 @@
         <li>Visit your website - chat button appears bottom-right!</li>
       </ol>
     </div>
+
+    <!-- Google Calendar Setup Modal -->
+    <div id="googleCalendarModal" class="modal">
+      <div class="modal-content">
+        <span class="modal-close" onclick="closeGoogleCalendarSetup()">✕</span>
+        <h3>Google Calendar Setup (5 minutes)</h3>
+        <p><strong>Step 1: Create Google Cloud Project</strong></p>
+        <ol>
+          <li>Go to <a href="https://console.cloud.google.com" target="_blank">Google Cloud Console</a></li>
+          <li>Click "Select a project" → "New Project"</li>
+          <li>Name it "AI Support Agent Calendar"</li>
+          <li>Wait for creation (~2 min)</li>
+        </ol>
+        <p><strong>Step 2: Enable Google Calendar API</strong></p>
+        <ol>
+          <li>Search for "Google Calendar API" in the search bar</li>
+          <li>Click it, then click "Enable"</li>
+          <li>Wait for the API to be enabled</li>
+        </ol>
+        <p><strong>Step 3: Create OAuth 2.0 Credentials</strong></p>
+        <ol>
+          <li>Go to "Credentials" in the left sidebar</li>
+          <li>Click "Create Credentials" → "OAuth 2.0 Client ID"</li>
+          <li>Choose "Web application"</li>
+          <li>Name it "AI Support Agent"</li>
+          <li><strong>Authorized redirect URIs:</strong> Add your dashboard URL (e.g., <code>https://yourdomain.com/dashboard.html</code>)</li>
+          <li>Click "Create"</li>
+        </ol>
+        <p><strong>Step 4: Copy Your Client ID</strong></p>
+        <p>Copy the <strong>Client ID</strong> from the popup and paste it below:</p>
+        <input type="text" id="googleClientId" placeholder="Your Client ID here" style="width: 100%; padding: 8px; margin: 10px 0;">
+        <p><small>Don't worry about Client Secret - we don't need it for this setup.</small></p>
+        <button onclick="saveGoogleClientId()" style="background: #4285F4; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">✓ Save Client ID</button>
+      </div>
+    </div>
   </main>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://apis.google.com/js/api.js"></script>
   <script src="dashboard.js"></script>
 </body>
 </html>
