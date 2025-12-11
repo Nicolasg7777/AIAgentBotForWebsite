@@ -90,28 +90,32 @@ async function testGroq() {
   }
   
   try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'mixtral-8x7b-32768',
-        messages: [{ role: 'user', content: 'Say "AI test successful" in exactly 3 words.' }],
-        max_tokens: 50
-      })
-    });
-    
-    if(!response.ok) {
-      const body = await response.json();
-      throw new Error(`${response.status}: ${body.error?.message || 'Unknown error'}`);
+    const models = ['llama-3.1-8b-instant','llama-3.1-70b','gemma2-9b-it'];
+    for(const model of models){
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: 'Say "AI test successful" in exactly 3 words.' }],
+          max_tokens: 50
+        })
+      });
+      if(response.ok){
+        const data = await response.json();
+        const reply = data.choices?.[0]?.message?.content || '(no response)';
+        status.innerHTML = `<span class="success">✅ AI working! Model: ${model}<br>Response: "${reply}"</span>`;
+        localStorage.setItem('workingAIModel', `groq:${model}`);
+        return;
+      } else {
+        const body = await response.json().catch(()=>null);
+        console.warn('Groq model failed', model, response.status, body?.error?.message);
+      }
     }
-    
-    const data = await response.json();
-    const reply = data.choices?.[0]?.message?.content || '(no response)';
-    status.innerHTML = `<span class="success">✅ AI working! Response: "${reply}"</span>`;
-    localStorage.setItem('workingAIModel', 'groq');
+    throw new Error('All Groq models failed. Try again later.');
   } catch(err) {
     status.innerHTML = `<span class="error">❌ Error: ${err.message}</span>`;
   }

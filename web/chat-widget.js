@@ -163,35 +163,38 @@ Remember: Your primary goal is to collect contact info and schedule a meeting!`;
     });
 
     async function getAIResponse(userMessage){
-      try {
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${CONFIG.GEMINI_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: 'mixtral-8x7b-32768',
-            messages: [
-              { role: 'system', content: SYSTEM_PROMPT },
-              ...conversationHistory.map(msg => ({
-                role: msg.role === 'user' ? 'user' : 'assistant',
-                content: msg.content
-              }))
-            ],
-            max_tokens: 200,
-            temperature: 0.7
-          })
-        });
-        
-        if(!response.ok) throw new Error(`Groq API error: ${response.status}`);
-        
-        const data = await response.json();
-        return data.choices?.[0]?.message?.content || simpleFAQ(userMessage);
-      } catch(err) {
-        console.error('AI Error:', err);
-        return simpleFAQ(userMessage);
+      const models = ['llama-3.1-8b-instant','llama-3.1-70b','gemma2-9b-it'];
+      for(const model of models){
+        try {
+          const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${CONFIG.GEMINI_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              model,
+              messages: [
+                { role: 'system', content: SYSTEM_PROMPT },
+                ...conversationHistory.map(msg => ({
+                  role: msg.role === 'user' ? 'user' : 'assistant',
+                  content: msg.content
+                }))
+              ],
+              max_tokens: 200,
+              temperature: 0.7
+            })
+          });
+          if(response.ok){
+            const data = await response.json();
+            return data.choices?.[0]?.message?.content || simpleFAQ(userMessage);
+          }
+        } catch(err) {
+          console.warn('Groq model failed', model, err.message);
+        }
       }
+      console.log('All Groq models failed, using FAQ fallback');
+      return simpleFAQ(userMessage);
     }
 
     function extractDataFromConversation(history){
