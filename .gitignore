@@ -1,0 +1,6 @@
+# Add your actual config values here - DO NOT COMMIT TO GIT!
+config.txt
+.env
+*.key
+*.pem
+secrets/
