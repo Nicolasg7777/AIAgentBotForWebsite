@@ -4,7 +4,7 @@
     SUPABASE_ANON_KEY: 'YOUR_SUPABASE_ANON_KEY',
     CALENDLY_LINK: 'https://calendly.com/yourname/15min',
     SUPPORT_AGENT_NAME: 'Support Bot',
-    GEMINI_API_KEY: 'YOUR_GEMINI_API_KEY', // Get free at https://aistudio.google.com/app/apikey
+    GEMINI_API_KEY: 'YOUR_OPENAI_API_KEY', // Get free at https://platform.openai.com/api-keys
     USE_AI: true // Set to false to use simple FAQ mode
   };
 
@@ -163,45 +163,35 @@ Remember: Your primary goal is to collect contact info and schedule a meeting!`;
     });
 
     async function getAIResponse(userMessage){
-      // Try saved working model first, then fallback list
-      const savedModel = localStorage.getItem('workingGeminiModel');
-      const modelsToTry = savedModel ? 
-        [savedModel, 'gemini-pro', 'gemini-1.5-pro', 'gemini-1.5-flash'] :
-        ['gemini-pro', 'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.5-flash-latest'];
-      
-      for(const model of modelsToTry) {
-        try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${CONFIG.GEMINI_API_KEY}`;
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [
-                { role: 'user', parts: [{ text: SYSTEM_PROMPT }] },
-                ...conversationHistory.map(msg => ({
-                  role: msg.role === 'user' ? 'user' : 'model',
-                  parts: [{ text: msg.content }]
-                }))
-              ],
-              generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 200,
-                topP: 0.8,
-                topK: 10
-              }
-            })
-          });
-          if(response.ok) {
-            const data = await response.json();
-            return data?.candidates?.[0]?.content?.parts?.[0]?.text || simpleFAQ(userMessage);
-          }
-        } catch(err) {
-          console.error(`AI model ${model} failed:`, err);
-        }
+      try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${CONFIG.GEMINI_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              ...conversationHistory.map(msg => ({
+                role: msg.role === 'user' ? 'user' : 'assistant',
+                content: msg.content
+              }))
+            ],
+            max_tokens: 200,
+            temperature: 0.7
+          })
+        });
+        
+        if(!response.ok) throw new Error(`OpenAI API error: ${response.status}`);
+        
+        const data = await response.json();
+        return data.choices?.[0]?.message?.content || simpleFAQ(userMessage);
+      } catch(err) {
+        console.error('AI Error:', err);
+        return simpleFAQ(userMessage);
       }
-      // All models failed, use FAQ fallback
-      console.log('All AI models failed, using FAQ fallback');
-      return simpleFAQ(userMessage);
     }
 
     function extractDataFromConversation(history){
