@@ -118,6 +118,25 @@ create policy "Allow select" on bookings for select using (true);
 
 ---
 
+## 🤖 Part 2.5: Get FREE AI Key (2 min) ⭐ NEW!
+
+### Enable Natural AI Conversations
+1. Go to https://aistudio.google.com/app/apikey
+2. Sign in with your Google account (no card needed!)
+3. Click "Create API Key"
+4. Copy the key (starts with `AIzaSy...`)
+5. **Save in notepad** - you'll need this in 1 minute!
+
+**Why?** This unlocks real AI conversations:
+- ✅ Bot understands context and questions naturally
+- ✅ Reliably collects all required info
+- ✅ Handles 20-25 concurrent users
+- ✅ 100% FREE (60 requests/min, 1,500/day)
+
+**Without AI key?** Widget still works in simple FAQ mode (just less smart).
+
+---
+
 ## ⚙️ Part 3: Configure the Widget (5 min)
 
 ### Option A: Use PowerShell Script (Easiest)
@@ -132,6 +151,7 @@ cd "c:\Users\garci\RepositoryFolder\AIAgentBotForWebsite"
 $SUPABASE_URL = "https://YOUR-PROJECT.supabase.co"
 $SUPABASE_ANON_KEY = "eyJhbGc..."  # Your long anon key
 $CALENDLY_LINK = "https://calendly.com/YOURNAME/15min"
+$GEMINI_API_KEY = "AIzaSy..."  # Your Gemini AI key ⭐ NEW
 $SUPPORT_AGENT_NAME = "Support Bot"
 
 # Run the replacement
@@ -139,6 +159,7 @@ $SUPPORT_AGENT_NAME = "Support Bot"
   -replace 'YOUR_SUPABASE_URL', $SUPABASE_URL `
   -replace 'YOUR_SUPABASE_ANON_KEY', $SUPABASE_ANON_KEY `
   -replace 'https://calendly.com/yourname/15min', $CALENDLY_LINK `
+  -replace 'YOUR_GEMINI_API_KEY', $GEMINI_API_KEY `
   -replace 'Support Bot', $SUPPORT_AGENT_NAME |
   Set-Content "web/wpcode-snippet.html"
 

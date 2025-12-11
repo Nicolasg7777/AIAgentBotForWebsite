@@ -1,12 +1,26 @@
 # AI Support Agent for Website
 
-This repo contains a simple, free-to-host customer support AI agent:
-- Floating chat widget for WordPress (Hostinger) via WPCode snippet
-- Captures name, email, phone, and availability
-- Logs conversations to Supabase (free tier)
-- Schedules meetings via Calendly (free) link
-- Admin dashboard to view logs, sessions, and upcoming meetings
-- Email reminders for meetings (Supabase Edge + Resend optional)
+This repo contains a **real AI-powered** customer support agent using **Google Gemini (FREE)**:
+- 🤖 Natural conversation AI (not just scripted responses)
+- 💬 Floating chat widget for WordPress (Hostinger) via WPCode snippet
+- 🎯 Reliably collects: name, email, phone, reason, availability
+- 📅 Schedules meetings via Calendly integration
+- 🗄️ Logs all conversations to Supabase (free tier)
+- 📊 Admin dashboard to view logs, sessions, and upcoming meetings
+- 📧 Email reminders for meetings (Supabase Edge + Resend optional)
+- 🆓 **100% FREE** - Handles 20-25 concurrent users easily
+
+## 🆕 AI-Powered Features
+
+**NEW:** Upgraded from simple rules to real AI!
+- Uses Google Gemini 1.5 Flash (free tier: 60 req/min, 1,500/day)
+- Natural conversation flow - no rigid step-by-step
+- Structured prompt ensures reliable data collection
+- Answers questions about your services intelligently
+- Gracefully guides users toward booking meetings
+- Fallback to simple FAQ mode if AI unavailable
+
+**See [AI-GUIDE.md](AI-GUIDE.md) for full details on the AI integration**
 
 ## Quick Start (Deploy Today)
 
@@ -23,6 +37,13 @@ This repo contains a simple, free-to-host customer support AI agent:
 3. Create an event type (e.g., "15 Minute Meeting")
 4. Copy your scheduling link (e.g., https://calendly.com/yourname/15min)
 
+### Step 2.5: Get Free Gemini AI Key (2 min) ⭐ NEW
+1. Go to https://aistudio.google.com/app/apikey
+2. Sign in with Google account
+3. Click "Create API Key"
+4. Copy the key (starts with `AI...`)
+5. **This enables natural AI conversations!**
+
 ### Step 3: Configure Widget (2 min)
 1. Open `web/wpcode-snippet.html`
 2. Replace these values:
@@ -30,6 +51,7 @@ This repo contains a simple, free-to-host customer support AI agent:
    - `YOUR_SUPABASE_ANON_KEY` → your anon key
    - `https://calendly.com/yourname/15min` → your Calendly link
    - `Support Bot` → your preferred bot name
+   - `YOUR_GEMINI_API_KEY` → your Gemini API key ⭐ NEW
 3. Save the file
 
 ### Step 4: Add to WordPress (3 min)
@@ -58,10 +80,13 @@ Create a `.env` file (or paste into WPCode snippet inline config):
 - SUPABASE_ANON_KEY
 - CALENDLY_LINK (e.g., https://calendly.com/yourname/15min)
 - SUPPORT_AGENT_NAME (e.g., "Crescendo Support Bot")
+- GEMINI_API_KEY (⭐ NEW - enables AI mode)
 
 For email reminders (optional):
 - RESEND_API_KEY (https://resend.com free tier)
 - REMINDER_FROM_EMAIL (e.g., support@yourdomain.com)
+
+**AI Mode:** Set `USE_AI: true` in config to enable natural conversations. Set to `false` for simple FAQ mode.
 
 ## Supabase Schema
 Run this SQL in Supabase SQL editor:
@@ -216,5 +241,7 @@ git push -u origin main
 
 ## Limitations
 - SMS reminders require a paid provider (Twilio trial possible). Email reminders supported free via Resend.
-- The bot uses a simple rules + FAQ approach for reliability and cost-free operation. You can upgrade to LLM later.
+- The bot uses **Google Gemini AI** for natural conversations (free tier: 60 req/min). Falls back to simple FAQ if API unavailable.
+- Gemini free tier limits: 1,500 requests/day, 1M tokens/month (enough for 20-25 concurrent users).
+- For details on AI capabilities, see [AI-GUIDE.md](AI-GUIDE.md)
 

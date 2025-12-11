@@ -3,8 +3,38 @@
     SUPABASE_URL: 'YOUR_SUPABASE_URL',
     SUPABASE_ANON_KEY: 'YOUR_SUPABASE_ANON_KEY',
     CALENDLY_LINK: 'https://calendly.com/yourname/15min',
-    SUPPORT_AGENT_NAME: 'Support Bot'
+    SUPPORT_AGENT_NAME: 'Support Bot',
+    GEMINI_API_KEY: 'YOUR_GEMINI_API_KEY', // Get free at https://aistudio.google.com/app/apikey
+    USE_AI: true // Set to false to use simple FAQ mode
   };
+
+  const SYSTEM_PROMPT = `You are a helpful customer support agent for our business. Your goal is to:
+1. Greet visitors warmly
+2. Collect their information in a natural conversation:
+   - Full name
+   - Email address
+   - Phone number
+   - Reason for contacting (what they need help with)
+   - Their availability for a meeting (days/times)
+3. Once you have all info, provide the Calendly scheduling link: ${CONFIG.CALENDLY_LINK || 'https://calendly.com/yourname/15min'}
+4. Answer questions about our services (marketing, SEO, web design)
+5. Provide helpful information about pricing, hours, and services
+
+IMPORTANT RULES:
+- Always be friendly and professional
+- Ask for ONE piece of information at a time (don't overwhelm)
+- Validate email format before moving on
+- If they ask questions, answer them, then gently guide back to collecting info
+- Once you have name, email, phone, reason, and availability, summarize and provide the Calendly link
+- Keep responses concise (2-3 sentences max)
+- Never make up information - if you don't know, say a specialist will follow up
+
+Our business info:
+- Services: Marketing, SEO, Web Design, Consulting
+- Hours: Mon-Fri 9am-5pm (your timezone)
+- Pricing: Custom quotes based on needs
+
+Remember: Your primary goal is to collect contact info and schedule a meeting!`;
 
   let supabaseClient;
   const loadSupabase = async () => {
@@ -74,45 +104,128 @@
     btn.addEventListener('click', async()=>{
       panel.style.display='flex'; btn.style.display='none';
       await ensureSession();
-      addMessage(messages,'bot','Hi! I can help with services, bookings, and questions. Please share your full name.');
-      await logMessage('bot','Hi! I can help with services, bookings, and questions. Please share your full name.');
+      
+      let greeting;
+      if(CONFIG.USE_AI && CONFIG.GEMINI_API_KEY && CONFIG.GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY'){
+        greeting = `Hi! I'm here to help you. I can answer questions about our services and help schedule a meeting. What brings you here today?`;
+      } else {
+        greeting = 'Hi! I can help with services, bookings, and questions. Please share your full name.';
+      }
+      
+      addMessage(messages,'bot', greeting);
+      await logMessage('bot', greeting);
+      conversationHistory.push({ role: 'assistant', content: greeting });
     });
     header.querySelector('.ai-chat-close').addEventListener('click',()=>{ panel.style.display='none'; btn.style.display='inline-block'; });
 
-    let step=0, fullName='', email='', phone='', availability='';
+    let conversationHistory = [];
+    let collectedData = { name: null, email: null, phone: null, reason: null, availability: null };
 
     sendBtn.addEventListener('click', async()=>{
       const text=input.value.trim(); if(!text) return; input.value='';
       addMessage(messages,'user',text); await logMessage('user',text);
+      conversationHistory.push({ role: 'user', content: text });
 
-      if(step===0){
-        fullName=text; addMessage(messages,'bot','Thanks '+fullName+"! What's your email?"); await logMessage('bot','Ask email'); step=1; return;
+      let reply;
+      if(CONFIG.USE_AI && CONFIG.GEMINI_API_KEY && CONFIG.GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY'){
+        // Use AI mode
+        reply = await getAIResponse(text);
+        
+        // Extract data from conversation context
+        extractDataFromConversation(conversationHistory);
+        
+        // Check if we have all required info
+        if(collectedData.name && collectedData.email && collectedData.phone && !reply.includes('calendly')){
+          // AI should naturally provide link, but ensure it's there
+          if(!conversationHistory.some(msg => msg.content.includes('calendly'))){
+            reply += ` You can schedule a time here: ${CONFIG.CALENDLY_LINK}`;
+          }
+        }
+        
+        // Save profile if we have the basic info
+        if(collectedData.name && collectedData.email && collectedData.phone && !state.profileId){
+          await upsertProfile(collectedData.name, collectedData.email, collectedData.phone);
+        }
+      } else {
+        // Fallback to simple FAQ mode
+        reply = simpleFAQ(text);
       }
-      if(step===1){
-        email=text; addMessage(messages,'bot','Got it. Your phone number?'); await logMessage('bot','Ask phone'); step=2; return;
-      }
-      if(step===2){
-        phone=text; await upsertProfile(fullName,email,phone);
-        addMessage(messages,'bot','What days/times are you available? (e.g., Tue 2-4pm)'); await logMessage('bot','Ask availability'); step=3; return;
-      }
-      if(step===3){
-        availability=text;
-        addMessage(messages,'bot','Great. Use this link to pick a slot that fits: '+CONFIG.CALENDLY_LINK);
-        await logMessage('bot','Provided Calendly link');
-        addMessage(messages,'bot','If you tell me your chosen date/time, I will log it and send reminders.');
-        await logMessage('bot','Ask chosen datetime'); step=4; return;
-      }
-      if(step===4){
-        const when = parseNaturalTime(text); // simple parser
-        if(!when){ addMessage(messages,'bot','Please provide a date/time like "2025-01-12 15:30" (local time).'); return; }
+      
+      addMessage(messages,'bot',reply);
+      await logMessage('bot',reply);
+      conversationHistory.push({ role: 'assistant', content: reply });
+
+      // Handle booking if user provides datetime
+      const when = parseNaturalTime(text);
+      if(when && state.profileId){
         await createBooking(when.toISOString());
-        addMessage(messages,'bot','Booked! We will email a reminder before the meeting.');
-        await logMessage('bot','Booking created for '+when.toISOString()); step=5; return;
       }
-      // FAQ / fallback
-      const reply = simpleFAQ(text);
-      addMessage(messages,'bot',reply); await logMessage('bot',reply);
     });
+
+    async function getAIResponse(userMessage){
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${CONFIG.GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              { role: 'user', parts: [{ text: SYSTEM_PROMPT }] },
+              ...conversationHistory.map(msg => ({
+                role: msg.role === 'user' ? 'user' : 'model',
+                parts: [{ text: msg.content }]
+              }))
+            ],
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 200,
+              topP: 0.8,
+              topK: 10
+            }
+          })
+        });
+        
+        if(!response.ok) throw new Error('Gemini API error');
+        
+        const data = await response.json();
+        return data.candidates[0].content.parts[0].text;
+      } catch(err) {
+        console.error('AI Error:', err);
+        return simpleFAQ(userMessage); // Fallback to simple FAQ
+      }
+    }
+
+    function extractDataFromConversation(history){
+      const allText = history.map(m => m.content).join(' ').toLowerCase();
+      
+      // Extract email
+      const emailMatch = allText.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
+      if(emailMatch && !collectedData.email) collectedData.email = emailMatch[0];
+      
+      // Extract phone
+      const phoneMatch = allText.match(/\+?1?[-.]?\(?\d{3}\)?[-.]?\d{3}[-.]?\d{4}/);
+      if(phoneMatch && !collectedData.phone) collectedData.phone = phoneMatch[0];
+      
+      // Extract name (look for user's first response or after "my name is")
+      if(!collectedData.name && history.length > 2){
+        const firstUserMsg = history.find(m => m.role === 'user')?.content;
+        if(firstUserMsg && firstUserMsg.split(' ').length <= 4 && !firstUserMsg.includes('@')){
+          collectedData.name = firstUserMsg;
+        }
+      }
+      
+      // Extract reason/availability from context
+      for(let i = history.length - 1; i >= 0; i--){
+        if(history[i].role === 'user'){
+          const msg = history[i].content.toLowerCase();
+          if((msg.includes('need') || msg.includes('want') || msg.includes('help')) && !collectedData.reason){
+            collectedData.reason = history[i].content;
+          }
+          if((msg.includes('available') || msg.includes('day') || msg.includes('time') || msg.match(/mon|tue|wed|thu|fri|sat|sun/i)) && !collectedData.availability){
+            collectedData.availability = history[i].content;
+          }
+        }
+      }
+    }
 
     function simpleFAQ(q){
       q=q.toLowerCase();
