@@ -1,6 +1,6 @@
-# Google Calendar Integration Setup Guide
+# Google Calendar Integration Setup Guide - Service Account (Simple)
 
-This guide walks you through setting up Google Calendar integration for automatic meeting event creation.
+This guide walks you through setting up Google Calendar integration using a Service Account - the easiest method!
 
 ## What This Does
 
@@ -14,15 +14,16 @@ When someone books a meeting through your chat widget:
 2. **Dashboard Integration**: 
    - See calendar event creation status in the Bookings tab
    - Manually create calendar events for existing bookings
-   - Easy connect/disconnect button
+   - Easy setup - no OAuth redirects!
 
 ## Prerequisites
 
 - A Google account (Gmail)
 - Google Cloud Console access (free)
 - Dashboard credentials configured
+- Supabase edge function deployed
 
-## Step-by-Step Setup
+## Step-by-Step Setup (5 minutes)
 
 ### Step 1: Create a Google Cloud Project
 
@@ -30,24 +31,102 @@ When someone books a meeting through your chat widget:
 2. Click **"Select a project"** dropdown at the top
 3. Click **"New Project"**
 4. Name it: `AI Support Agent Calendar`
-5. Click **"Create"** and wait 1-2 minutes for setup
+5. Click **"Create"**
 
 ### Step 2: Enable Google Calendar API
 
-1. In the Cloud Console, search for **"Google Calendar API"** in the search bar
+1. In the Cloud Console search bar, type: **"Google Calendar API"**
 2. Click the result
 3. Click **"Enable"** button
-4. Wait for the API to be enabled (show spinning icon)
+4. Wait for it to enable
 
-### Step 3: Create OAuth 2.0 Credentials
+### Step 3: Create Service Account
 
 1. Click **"Credentials"** in the left sidebar
-2. Click **"Create Credentials"** → **"OAuth 2.0 Client ID"**
-3. You may see a popup about "Consent Screen" - click **"Configure Consent Screen"**
+2. Click **"Create Credentials"** → **"Service Account"**
+3. Enter these details:
+   - **Service account name**: `ai-support-calendar`
+   - **Service account ID**: (auto-filled)
+   - **Description**: Calendar access for AI support agent
+4. Click **"Create and Continue"**
+5. Skip optional steps - click **"Continue"** then **"Done"**
 
-#### Configure Consent Screen:
-1. Select **"External"** user type
-2. Click **"Create"**
+### Step 4: Download JSON Key
+
+1. Find your service account in the list and click on it
+2. Go to the **"Keys"** tab
+3. Click **"Add Key"** → **"Create new key"**
+4. Choose **"JSON"** format
+5. Click **"Create"**
+6. A JSON file will download to your computer
+7. Open this file in Notepad or any text editor
+
+### Step 5: Share Your Google Calendar with Service Account
+
+**Important:** The service account needs permission to create events!
+
+1. Open [Google Calendar](https://calendar.google.com)
+2. Find your calendar in the left sidebar (usually "My Calendar" or your email)
+3. Click the **3 dots** next to it → **"Settings and sharing"**
+4. Scroll to **"Share with specific people"** section
+5. Click **"Add people"**
+6. **Paste the `client_email`** from your JSON file (it looks like: `ai-support-calendar@...gserviceaccount.com`)
+7. Set permission to: **"Make changes to events"**
+8. Click **"Send"** (ignore the warning about external email)
+
+### Step 6: Deploy Edge Function
+
+You need to deploy the edge function that handles JWT token generation:
+
+1. Create the edge function file at `supabase/functions/google-calendar-token/index.ts`
+2. Copy the code from `web/edge-google-calendar-token.js` 
+3. Deploy it:
+   ```bash
+   supabase functions deploy google-calendar-token
+   ```
+
+### Step 7: Paste Service Account JSON in Dashboard
+
+1. Open your dashboard
+2. Click **"Google Calendar Setup"** button
+3. Copy the **entire contents** of the JSON file you downloaded
+4. Paste it into the textarea
+5. Click **"Save Service Account"**
+6. Done! Calendar is now configured ✅
+
+## Testing
+
+1. Go to your Bookings tab in the dashboard
+2. Find any booking without a calendar event
+3. Click **"Create Event"** button
+4. Check your Google Calendar - event should appear!
+
+## Troubleshooting
+
+**"Token generation failed"**
+- Make sure the edge function is deployed
+- Check that your Supabase URL and key are correct in config
+
+**"Permission denied" or calendar API errors**
+- Verify you shared the calendar with the service account email
+- The permission must be "Make changes to events"
+- Wait a few minutes after sharing for permissions to propagate
+
+**JSON validation error**
+- Make sure you copied the ENTIRE JSON file contents
+- The JSON should start with `{` and end with `}`
+- Don't modify the JSON file
+
+## Security Notes
+
+- Service account JSON contains private keys - keep it secure
+- The edge function handles JWT signing server-side (more secure than browser)
+- Never commit service account JSON to public repositories
+- Rotate keys periodically for best security
+
+## What's Next?
+
+Your calendar integration is ready! Events will be created automatically when bookings are made.
 3. Fill in the form:
    - **App name**: `AI Support Agent`
    - **User support email**: Your email

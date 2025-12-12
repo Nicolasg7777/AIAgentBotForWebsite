@@ -48,8 +48,7 @@ function saveConfig() {
     twilioSid: document.getElementById('twilioSid').value.trim(),
     twilioToken: document.getElementById('twilioToken').value.trim(),
     twilioPhone: document.getElementById('twilioPhone').value.trim(),
-    googleClientId: localStorage.getItem('googleClientId') || '',
-    googleAccessToken: localStorage.getItem('googleAccessToken') || ''
+    googleServiceAccount: localStorage.getItem('googleServiceAccount') || ''
   };
   
   localStorage.setItem('aiAgentConfig', JSON.stringify(config));
@@ -401,89 +400,108 @@ function closeGoogleCalendarSetup() {
   document.getElementById('googleCalendarModal').classList.remove('active');
 }
 
-function saveGoogleClientId() {
-  const clientId = document.getElementById('googleClientId').value.trim();
-  if(!clientId) {
-    alert('Please enter your Google Client ID');
-    return;
-  }
-  localStorage.setItem('googleClientId', clientId);
-  config.googleClientId = clientId;
-  document.getElementById('googleClientId').value = '';
-  closeGoogleCalendarSetup();
-  updateCalendarStatus();
-  alert('✅ Client ID saved! Click "Connect Google Calendar" to authenticate.');
-}
-
-function connectGoogleCalendar() {
-  const clientId = localStorage.getItem('googleClientId');
-  if(!clientId) {
-    alert('Please set up your Google Client ID first.');
-    showGoogleCalendarSetup();
+function saveGoogleServiceAccount() {
+  const serviceAccountJson = document.getElementById('googleServiceAccount').value.trim();
+  
+  if(!serviceAccountJson) {
+    alert('Please paste your Google Service Account JSON key');
     return;
   }
   
-  // Build OAuth URL
-  const redirectUri = window.location.origin + window.location.pathname;
-  const scopes = encodeURIComponent('https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.readonly');
-  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-    `client_id=${clientId}&` +
-    `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-    `response_type=token&` +
-    `scope=${scopes}&` +
-    `access_type=offline`;
-  
-  // Open OAuth popup
-  window.open(authUrl, 'googleAuth', 'width=600,height=600');
-  
-  // Listen for message from OAuth redirect
-  window.addEventListener('message', handleGoogleOAuthCallback);
-}
-
-function handleGoogleOAuthCallback(event) {
-  const hash = window.location.hash;
-  if(hash && hash.includes('access_token')) {
-    const params = new URLSearchParams(hash.replace('#', ''));
-    const token = params.get('access_token');
-    if(token) {
-      localStorage.setItem('googleAccessToken', token);
-      localStorage.setItem('googleTokenExpiry', Date.now() + (parseInt(params.get('expires_in') || '3600') * 1000));
-      config.googleAccessToken = token;
-      updateCalendarStatus();
-      alert('✅ Google Calendar connected successfully!');
-      window.location.hash = '';
+  try {
+    // Validate JSON
+    const parsed = JSON.parse(serviceAccountJson);
+    if(!parsed.client_email || !parsed.private_key) {
+      throw new Error('Invalid service account JSON - missing required fields');
     }
+    
+    localStorage.setItem('googleServiceAccount', serviceAccountJson);
+    config.googleServiceAccount = serviceAccountJson;
+    document.getElementById('googleServiceAccount').value = '';
+    closeGoogleCalendarSetup();
+    updateCalendarStatus();
+    alert('✅ Service Account saved! You can now create calendar events.');
+  } catch(err) {
+    alert('❌ Invalid JSON: ' + err.message);
   }
 }
+
+// Service account doesn't need OAuth connection - it's always ready
+function connectGoogleCalendar() {
+  showGoogleCalendarSetup();
+}
+
+// No OAuth callback needed for service account
 
 function updateCalendarStatus() {
-  const clientId = localStorage.getItem('googleClientId');
-  const accessToken = localStorage.getItem('googleAccessToken');
+  const serviceAccount = localStorage.getItem('googleServiceAccount');
   const statusEl = document.getElementById('calendarStatus');
   const disconnectBtn = document.getElementById('disconnectCalendarBtn');
   
-  if(accessToken) {
-    statusEl.innerHTML = '<span class="status-badge status-connected">✓ Connected</span>';
-    disconnectBtn.style.display = 'inline-block';
-  } else if(clientId) {
-    statusEl.innerHTML = '<span class="status-badge status-disconnected">⚠ Not Authenticated</span>';
+  if(serviceAccount) {
+    try {
+      const parsed = JSON.parse(serviceAccount);
+      statusEl.innerHTML = '<span class="status-badge status-connected">✓ Configured (' + parsed.client_email + ')</span>';
+      disconnectBtn.style.display = 'inline-block';
+    } catch(e) {
+      statusEl.innerHTML = '<span class="status-badge status-disconnected">⚠ Invalid Configuration</span>';
+    }
   } else {
     statusEl.innerHTML = '<span class="status-badge status-disconnected">⚠ Not Configured</span>';
   }
 }
 
 function disconnectGoogleCalendar() {
-  if(confirm('Are you sure? This will disconnect Google Calendar access.')) {
-    localStorage.removeItem('googleAccessToken');
-    localStorage.removeItem('googleTokenExpiry');
-    config.googleAccessToken = '';
+  if(confirm('Are you sure? This will remove your Google Service Account credentials.')) {
+    localStorage.removeItem('googleServiceAccount');
+    config.googleServiceAccount = '';
     updateCalendarStatus();
     alert('✅ Google Calendar disconnected');
   }
 }
 
+// Generate JWT token for service account (via edge function for security)
+async function getServiceAccountToken() {
+  const serviceAccountJson = localStorage.getItem('googleServiceAccount');
+  if(!serviceAccountJson) return null;
+  
+  try {
+    // Send service account to edge function for JWT signing
+    // This is more secure than exposing private keys in browser
+    const response = await fetch(`${config.supabaseUrl}/functions/v1/google-calendar-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.supabaseKey}`
+      },
+      body: serviceAccountJson
+    });
+    
+    if(!response.ok) {
+      console.error('Token generation failed:', await response.text());
+      return null;
+    }
+    
+    const data = await response.json();
+    return data.access_token;
+  } catch(error) {
+    console.error('Service account token error:', error);
+    return null;
+  }
+}
+
+// Helper to convert string to ArrayBuffer for crypto operations
+function str2ab(str) {
+  const buf = atob(str);
+  const bytes = new Uint8Array(buf.length);
+  for(let i = 0; i < buf.length; i++) {
+    bytes[i] = buf.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
 async function createGoogleCalendarEvent(bookingData) {
-  const accessToken = localStorage.getItem('googleAccessToken');
+  const accessToken = await getServiceAccountToken();
   if(!accessToken) return null;
   
   try {
@@ -531,7 +549,7 @@ async function createGoogleCalendarEvent(bookingData) {
 }
 
 async function checkCalendarAvailability(startTime, endTime) {
-  const accessToken = localStorage.getItem('googleAccessToken');
+  const accessToken = await getServiceAccountToken();
   if(!accessToken) return true; // If no calendar, don't block booking
   
   try {
