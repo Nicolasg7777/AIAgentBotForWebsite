@@ -32,6 +32,10 @@ function loadConfig() {
     if(config.supabaseUrl && config.supabaseKey) {
       supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseKey);
     }
+  } else {
+    // Pre-fill Resend API key and email on first load
+    document.getElementById('resendKey').value = 're_gcFGkxev_BEPFA7WhBU93hRxdFoVU2y9G';
+    document.getElementById('fromEmail').value = 'noreply@onboarding.dev';
   }
 }
 
